@@ -11,9 +11,11 @@ api=Api(app)
 
 #database config
 load_dotenv()
-db.init_app(app)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db.init_app(app)
 #flask_restful routes
 api.add_resource(Dashboard, '/')
 api.add_resource(CertificateSender,"/certificate-sender")

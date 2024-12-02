@@ -13,7 +13,7 @@ api=Api(app)
 load_dotenv()
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv("Track-Modifications")
 
 db.init_app(app)
 #flask_restful routes

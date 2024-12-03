@@ -4,4 +4,9 @@ Flask-SQLAlchemy==3.0.0
 python-dotenv==1.0.0
 SQLAlchemy==2.0.0
 Werkzeug==3.0.1
-psycopg2==2.9.10  
+psycopg2==2.9.10
+pandas==2.2.3
+PyMuPDF==1.24.14
+google-api-python-client==2.151.0
+google-auth==2.36.0
+Pillow==11.0.0

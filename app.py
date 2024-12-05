@@ -1,9 +1,10 @@
-from flask import Flask
+from flask import Flask, send_file
 from flask_restful import Api
-from routes import Dashboard, CertificateSender, Users
+from routes import Dashboard, CertificateSender, Users, CertificatePreview
 import os
 from dotenv import load_dotenv
-from models import db,User
+from models import db, User
+import io
 
 #flask intialization
 app = Flask(__name__)
@@ -20,7 +21,7 @@ db.init_app(app)
 api.add_resource(Dashboard, '/')
 api.add_resource(CertificateSender,"/certificate-sender")
 api.add_resource(Users, '/users')
-
+api.add_resource(CertificatePreview, "/certificate-preview")
 if __name__ == '__main__':
     with app.app_context():
         # Check if the database file exists

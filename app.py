@@ -10,7 +10,7 @@ app = Flask(__name__)
 api=Api(app)
 
 #database config
-load_dotenv()
+
 
 db_url = os.getenv("DATABASE_URL")
 if not db_url:

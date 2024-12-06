@@ -18,7 +18,7 @@ logging.basicConfig(filename='certificate_process.log', level=logging.ERROR,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
-load_dotenv()
+
 
 creds = Credentials.from_service_account_info(
     {

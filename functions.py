@@ -77,7 +77,7 @@ def generate_preview(presentation_id, full_name):
 
         # Render the page as an image
         pix = page.get_pixmap(dpi=300)  # Higher DPI for better quality
-        image_data = BytesIO(pix.tobytes("jpg"))  # Return the image data as a file-like object
+        image_data = pix.tobytes("jpg")  # Return the image data as a file-like object
 
         
     except Exception as e:
@@ -151,6 +151,7 @@ def process_and_send_certificates(presentation_id, subject, body, row):
 
             # Delete the copied presentation
             drive_service.files().delete(fileId=copied_presentation_id).execute()
+            return f"Certificate sent successfully to {full_name} ({email})"
 
         except Exception as e:
             logging.error(f"Error processing {full_name} ({email}): {e}")

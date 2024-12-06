@@ -38,33 +38,9 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          TRACK_MODIFICATION: ${{ secrets.TRACK_MODIFICATION }}
-          GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
-          GOOGLE_PRIVATE_KEY_ID: ${{ secrets.GOOGLE_PRIVATE_KEY_ID }}
-          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
-          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_AUTH_CLIENT_ID: ${{ secrets.GOOGLE_AUTH_CLIENT_ID }}
-          GOOGLE_AUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_AUTH_CLIENT_SECRET }}
-          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          
         run: |
           curl -X POST "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
           -H "Authorization: Bearer $RENDER_API_KEY" \
           -H "Content-Type: application/json" \
-          -d '{
-            "env": {
-              "DATABASE_URL": "'"${DATABASE_URL}"'",
-              "TRACK_MODIFICATION": "'"${TRACK_MODIFICATION}"'",
-              "GOOGLE_PROJECT_ID": "'"${GOOGLE_PROJECT_ID}"'",
-              "GOOGLE_PRIVATE_KEY_ID": "'"${GOOGLE_PRIVATE_KEY_ID}"'",
-              "GOOGLE_PRIVATE_KEY": "'"${GOOGLE_PRIVATE_KEY}"'",
-              "GOOGLE_CLIENT_EMAIL": "'"${GOOGLE_CLIENT_EMAIL}"'",
-              "GOOGLE_CLIENT_ID": "'"${GOOGLE_CLIENT_ID}"'",
-              "GOOGLE_AUTH_CLIENT_ID": "'"${GOOGLE_AUTH_CLIENT_ID}"'",
-              "GOOGLE_AUTH_CLIENT_SECRET": "'"${GOOGLE_AUTH_CLIENT_SECRET}"'",
-              "EMAIL_ADDRESS": "'"${EMAIL_ADDRESS}"'",
-              "EMAIL_PASSWORD": "'"${EMAIL_PASSWORD}"'"
-            }
-          }'
+          -d '{}'

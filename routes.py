@@ -2,9 +2,7 @@ from flask_restful import Resource
 from models import User
 from functions import generate_preview, process_and_send_certificates
 from flask import request, jsonify, Response
-import os
-import pandas as pd
-import io
+from models import db, User
 
 #mainpage dashboard
 class Dashboard(Resource):
@@ -32,10 +30,22 @@ class CertificateSender(Resource):
             for row in rows:
                 result = process_and_send_certificates(presentation_id, subject, body, row)
                 results.append(result)
+                if "Certificate sent successfully" in result:
+                    full_name = row.get("Full Name")
+                    email = row.get("Email")
+
+                    # Add user to the database
+                    user = User(username=full_name, email=email)
+                    db.session.add(user)
+
+            # Committing all database changes
+            db.session.commit()
 
             return {"message": "Certificates processed successfully", "results": results}, 200
 
         except Exception as e:
+            #Rolling back in case of an error
+            db.session.rollback()
             return {"error": str(e)}, 500
 
 #preview shower
@@ -57,16 +67,12 @@ class CertificatePreview(Resource):
                                 image_data,
                                 mimetype='image/jpeg',  # Adjust based on your image format
                                 direct_passthrough=True
-        )
+                                )
             else:
                 return jsonify({"error": "Failed to generate certificate preview"}), 500
         except Exception as e:
             # Catch and log any unexpected errors
             return jsonify({"error": str(e)}), 500
-
-# Function to check allowed file types
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'csv'
 
 
 #db connection checker

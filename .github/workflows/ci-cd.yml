@@ -40,8 +40,7 @@ jobs:
           EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: |
-          python -m tests.read_db
-          python -m tests.delete_db
+          
           python -m tests.certificate_sender_test
           python -m tests.certificate_preview_test
 

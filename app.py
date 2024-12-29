@@ -1,4 +1,5 @@
 from flask import Flask, send_file
+from flask_cors import CORS
 from flask_restful import Api
 from routes import Dashboard, CertificateSender, Users, CertificatePreview
 import os
@@ -26,6 +27,9 @@ api.add_resource(Dashboard, '/')
 api.add_resource(CertificateSender, "/certificate-sender")
 api.add_resource(Users, '/users')
 api.add_resource(CertificatePreview, "/certificate-preview")
+
+# Add CORS protection using Flask-CORS
+CORS(app, resources={r"/*": {"origins": f"{os.getenv('FRONTEND_URL')}/*"}})
 
 if __name__ == '__main__':
     with app.app_context():

@@ -24,19 +24,19 @@ class CertificateSender(Resource):
 
             if not (presentation_id and subject and body and rows):
                 return {"error": "Missing required fields"}, 400
-
+            
             # Process and send certificates for each user
-            results = []
-            for row in rows:
-                result = process_and_send_certificates(presentation_id, subject, body, row)
-                results.append(result)
-                if "Certificate sent successfully" in result:
-                    full_name = row.get("Full Name")
-                    email = row.get("Email")
+            results = process_and_send_certificates(presentation_id, subject, body, rows)
 
-                    # Add user to the database
+            for row in rows:
+                full_name = row.get("Full Name")
+                email = row.get("Email")
+
+                existing_user = User.query.filter_by(email=email).first()
+                if not existing_user:
                     user = User(username=full_name, email=email)
                     db.session.add(user)
+
 
             # Committing all database changes
             db.session.commit()

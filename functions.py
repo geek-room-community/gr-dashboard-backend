@@ -1,158 +1,92 @@
-import smtplib
+import cv2
+import numpy as np
 from email.mime.multipart import MIMEMultipart
+import os
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
-import os
 import pandas as pd
-import fitz
-from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
 from PIL import Image
-from pdf2image import convert_from_bytes
-from io import BytesIO
+import io
+import smtplib
 from dotenv import load_dotenv
 import logging
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(filename='certificate_process.log', level=logging.ERROR,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load environment variables
-
-
-creds = Credentials.from_service_account_info(
-    {
-        "type": "service_account",
-        "project_id": os.getenv("GOOGLE_PROJECT_ID"),
-        "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
-        "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace('\\n', '\n'),
-        "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{os.getenv('GOOGLE_CLIENT_EMAIL')}"
-    }
-)
-
-# Function to generate a preview of the certificate
-def generate_preview(presentation_id, full_name):
-    drive_service = build('drive', 'v3', credentials=creds)
-    slides_service = build('slides', 'v1', credentials=creds)
-
-    # Create a copy of the presentation for preview
-    presentation_copy = drive_service.files().copy(
-        fileId=presentation_id,
-        body={'name': f'Preview_{full_name}'}
-    ).execute()
-    copied_presentation_id = presentation_copy['id']
-
+def generate_preview(image_byte, full_name, about_text = ((600, 600), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 2, (0, 0, 0))):
     try:
-        # Replace placeholders in the copied presentation
-        slides_service.presentations().batchUpdate(
-            presentationId=copied_presentation_id,
-            body={
-                'requests': [{
-                    'replaceAllText': {
-                        'containsText': {
-                            'text': '{{Full_Name}}',
-                            'matchCase': True
-                        },
-                        'replaceText': full_name
-                    }
-                }]
-            }
-        ).execute()
-
-        # Export the presentation as a PDF
-        export_url = f"https://www.googleapis.com/drive/v3/files/{copied_presentation_id}/export?mimeType=application/pdf"
-        response, content = drive_service._http.request(export_url)
-
-        if response.status != 200:
-            raise Exception(f"Failed to export presentation as PDF: {response.reason}")
-
-        # Load PDF content into PyMuPDF
-        pdf_document = fitz.open(stream=content, filetype="pdf")
-        page = pdf_document[0]  # Get the first slide (page)
-
-        # Render the page as an image
-        pix = page.get_pixmap(dpi=300)  # Higher DPI for better quality
-        image_data = pix.tobytes("jpg")  # Return the image data as a file-like object
-
-        
+        cords, font, size, color = about_text[0], about_text[1], about_text[2], about_text[3]
+        # Convert byte stream to a NumPy array
+        nparr = np.frombuffer(image_byte, np.uint8)
+        # Decode NumPy array into an image
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        image = cv2.putText(image, full_name, cords, font, size, color)
+        _, image_data = cv2.imencode('.jpg', image)
     except Exception as e:
         logging.error(f"Error generating preview for {full_name}: {e}")
         image_data=None
     finally:
-        # Clean up by deleting the copied presentation
-        try:
-            drive_service.files().delete(fileId=copied_presentation_id).execute()
-            return image_data
-        except Exception as e:
-            logging.error(f"Error deleting copied presentation: {e}")
+        return image_data
 
-# Function to process and send certificates (unchanged)
-def process_and_send_certificates(presentation_id, subject, body, row):
-    # Initialize Google Drive and Slides services
-    drive_service = build('drive', 'v3', credentials=creds)
-    slides_service = build('slides', 'v1', credentials=creds)
+def process_and_send_certificate(image_byte, row, subject, body, about_text = ((600, 600), cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 2, (0, 0, 0))):
+    #about_text should be a tuple with 4 elements, co-ordinates, font, size and color in this order
+    try:
+        full_name = row['Full Name']
+        email = row['Email']
+        cords, font, size, color = about_text[0], about_text[1], about_text[2], about_text[3]
+        
+        # Convert byte stream to a NumPy array
+        nparr = np.frombuffer(image_byte, np.uint8)
+        # Decode NumPy array into an image
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.putText(image, full_name, cords, font, size, color)
 
-    full_name = row['Full Name']
-    email = row['Email']
+        # Converting image to pdf
+        pil_image = Image.fromarray(image)
+        pdf_buffer = io.BytesIO()
+        pil_image.save(pdf_buffer, format="PDF")
+        pdf_blob = pdf_buffer.getvalue()
+        pdf_buffer.close()
+    
+        # Send email with the attached PDF
+        msg = MIMEMultipart()
+        msg['From'] = os.getenv("EMAIL_ADDRESS")
+        msg['To'] = email
+        msg['Subject'] = subject
+        if pd.notna(full_name) and pd.notna(email): 
+            email_body = body.replace("{Full_Name}", full_name)
+        msg.attach(MIMEText(email_body, 'html'))
 
-    if pd.notna(full_name) and pd.notna(email): 
-        email_body = body.replace("{Full_Name}", full_name)
+        pdf_attachment = MIMEApplication(pdf_blob, Name=f"{full_name}_Certificate.pdf")
+        pdf_attachment['Content-Disposition'] = f'attachment; filename="{full_name}_Certificate.pdf"'
+        msg.attach(pdf_attachment)
 
-        try:
-            # Create a copy of the presentation
-            presentation_copy = drive_service.files().copy(
-                fileId=presentation_id,
-                body={'name': f'{full_name} Presentation'}
-            ).execute()
-            copied_presentation_id = presentation_copy['id']
-
-            # Replace placeholders in the copied presentation
-            slides_service.presentations().batchUpdate(
-                presentationId=copied_presentation_id,
-                body={
-                    'requests': [{
-                        'replaceAllText': {
-                            'containsText': {
-                                'text': '{{Full_Name}}',
-                                'matchCase': True
-                            },
-                            'replaceText': full_name
-                        }
-                    }]
-                }
-            ).execute()
-
-            # Export as PDF
-            pdf_blob = drive_service.files().export(
-                fileId=copied_presentation_id,
-                mimeType='application/pdf'
-            ).execute()
-
-            # Send email with the attached PDF
-            msg = MIMEMultipart()
-            msg['From'] = os.getenv("EMAIL_ADDRESS")
-            msg['To'] = email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(email_body, 'html'))
-
-            pdf_attachment = MIMEApplication(pdf_blob, Name=f"{full_name}_Certificate.pdf")
-            pdf_attachment['Content-Disposition'] = f'attachment; filename="{full_name}_Certificate.pdf"'
-            msg.attach(pdf_attachment)
-
-            with smtplib.SMTP('smtp.gmail.com', 587) as server:
-                server.starttls()
-                server.login(os.getenv("EMAIL_ADDRESS"), os.getenv("EMAIL_PASSWORD"))
-                server.send_message(msg)
-
-            # Delete the copied presentation
-            drive_service.files().delete(fileId=copied_presentation_id).execute()
-            return f"Certificate sent successfully to {full_name} ({email})"
-
-        except Exception as e:
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(os.getenv("EMAIL_ADDRESS"), os.getenv("EMAIL_PASSWORD"))
+            server.send_message(msg)
+        return f"Certificate sent successfully to {full_name} ({email})"
+    except Exception as e:
             logging.error(f"Error processing {full_name} ({email}): {e}")
             return f"Error processing {full_name} ({email}): {e}"
+
+"""
+This code was used to check the working of these functions without the use of flask, directly in the terminal
+# Example byte stream (e.g., from a file or network request)
+with open('tests\\test.jpg', 'rb') as f:
+    image_byte = f.read()
+
+row = {'Full Name': "Jaspreet Singh", 'Email': "jaspreet.jsk.kohli@gmail.com"}
+#process_and_send_certificate(image_byte, row, "Certificate of Achievement", "Hello Jaspreet Singh, congratulations! 🎉")
+
+nparr = np.frombuffer(generate_preview(image_byte, "Jaspreet Singh"), np.uint8)
+image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+cv2.imshow("Image", image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+"""

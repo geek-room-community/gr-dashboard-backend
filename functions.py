@@ -9,6 +9,8 @@ from PIL import Image
 import io
 import smtplib
 from dotenv import load_dotenv
+import requests
+import base64
 import logging
 load_dotenv()
 
@@ -53,27 +55,47 @@ def process_and_send_certificate(image_byte, row, subject, body, about_text = ((
         pdf_buffer.close()
     
         # Send email with the attached PDF
-        msg = MIMEMultipart()
-        msg['From'] = os.getenv("EMAIL_ADDRESS")
-        msg['To'] = email
-        msg['Subject'] = subject
-        if pd.notna(full_name) and pd.notna(email): 
-            email_body = body.replace("{Full_Name}", full_name)
-        msg.attach(MIMEText(email_body, 'html'))
-
-        pdf_attachment = MIMEApplication(pdf_blob, Name=f"{full_name}_Certificate.pdf")
-        pdf_attachment['Content-Disposition'] = f'attachment; filename="{full_name}_Certificate.pdf"'
-        msg.attach(pdf_attachment)
-
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login(os.getenv("EMAIL_ADDRESS"), os.getenv("EMAIL_PASSWORD"))
-            server.send_message(msg)
+        send_email(full_name, email, subject, body, pdf_blob)
         return f"Certificate sent successfully to {full_name} ({email})"
     except Exception as e:
             logging.error(f"Error processing {full_name} ({email}): {e}")
             return f"Error processing {full_name} ({email}): {e}"
 
+# Function to send an email with an attachment
+def send_email(full_name, email, subject, body, pdf_blob):
+    url = 'https://api.emailit.com/v1/emails'
+
+    headers = {
+        "Authorization": f"Bearer {os.getenv('EMAILIT_API_KEY')}",
+        "Content-Type": "application/json"
+    }
+    encoded_pdf = base64.b64encode(pdf_blob).decode('utf-8')
+
+    email_data = {
+        "from": os.getenv("EMAIL_ADDRESS"),
+        "to": email,
+        "subject": subject,
+        "html": body,
+        "attachments": [
+            {
+                "filename": f"{full_name}_Certificate.pdf",
+                "content": encoded_pdf,
+                "content_type": "base64"
+            }
+        ]
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=email_data)
+
+        if response.status_code == 200:
+            logging.info(f"Email sent successfully to {full_name} ({email})")
+        else:
+            logging.error(f"Failed to send email to {email}: {response.text}")
+            raise Exception(f"Error sending email: {response.text}")
+    except Exception as e:
+        logging.error(f"Error processing email for {full_name} ({email}): {e}")
+        raise
 """
 This code was used to check the working of these functions without the use of flask, directly in the terminal
 # Example byte stream (e.g., from a file or network request)
@@ -81,8 +103,7 @@ with open('tests\\test.jpg', 'rb') as f:
     image_byte = f.read()
 
 row = {'Full Name': "Jaspreet Singh", 'Email': "jaspreet.jsk.kohli@gmail.com"}
-#process_and_send_certificate(image_byte, row, "Certificate of Achievement", "Hello Jaspreet Singh, congratulations! 🎉")
-
+process_and_send_certificate(image_byte, row, "Certificate of Achievement", "Hello Jaspreet Singh, congratulations! 🎉")
 nparr = np.frombuffer(generate_preview(image_byte, "Jaspreet Singh"), np.uint8)
 image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 cv2.imshow("Image", image)

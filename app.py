@@ -14,8 +14,8 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = None  # 16 MB
 app.config['MAX_FORM_MEMORY_SIZE'] = 50 * 1024 * 1024  # 50 MB
 CORS(app, resources={
-     r"/certificate-preview": {"origins": "http://192.168.0.162:5173"},
-     r"/certificate-sender": {"origins": "http://192.168.0.162:5173"}})
+     r"/certificate-preview": {"origins": "https://dashboards.geekroom.in"},
+     r"/certificate-sender": {"origins": "https://dashboards.geekroom.in"}})
 api = Api(app)
 
 # Database config

@@ -1,87 +1,134 @@
+import io
+import base64
+import json
 from flask_restful import Resource
-from models import User
-from functions import generate_preview, process_and_send_certificates
-from flask import request, jsonify, Response
+from flask import request, send_file, jsonify
+from PIL import Image
+import pandas as pd
 from models import db, User
+from functions import generate_preview, process_and_send_certificate
 
-#mainpage dashboard
+# mainpage dashboard
+
+
 class Dashboard(Resource):
-    def get(x):
+    def get(self):
         return {"message": "Geek Room Dashboard!"}
 
-#certificate Sender
+# certificate Sender
+
+
 class CertificateSender(Resource):
     def get(self):
         return {"message": "Certificate Sender"}
+
     def post(self):
         try:
-            #Parsing the input
-            data = request.json
-            presentation_id = data.get('presentation_id')
-            subject = data.get('subject')
-            body = data.get('body')
-            rows = data.get('rows')  # List of user data in JSON format
+            if "file" not in request.files:
+                return jsonify({"error": "No file part"}), 400
 
-            if not (presentation_id and subject and body and rows):
-                return {"error": "Missing required fields"}, 400
+            csv_file = request.files["file"]
+            csv_data = io.BytesIO(csv_file.read())
+            df = pd.read_csv(csv_data)
+
+            img_file = request.form['image']
+
+            # Read the uploaded image as bytes
+            image_bytes = base64.b64decode(img_file.split(',')[1])
+
+            image = Image.open(
+                io.BytesIO(base64.b64decode(img_file.split(',')[1])))
+
+            width, height = image.size
+
+            start_x = float(request.form['start'])
+            start_y = float(request.form['end'])
+            font = int(request.form['font'])
+            size = float(request.form['size'])
+            color = json.loads(request.form['color'])
+            thickness = int(request.form['thickness'])
+            about_text = ((int(start_x*width), int(start_y*height)),
+                          font, size, color, thickness)
+            subject = request.form['subject']
+            body = request.form['body']
 
             # Process and send certificates for each user
-            results = []
-            for row in rows:
-                result = process_and_send_certificates(presentation_id, subject, body, row)
-                results.append(result)
-                if "Certificate sent successfully" in result:
-                    full_name = row.get("Full Name")
-                    email = row.get("Email")
+            for i in range(len(df.index)):
+                full_name = df.loc[i].iloc[0]
+                email = df.loc[i].iloc[1]
+                process_and_send_certificate(
+                    image_bytes, full_name, email, subject, body, about_text)
 
-                    # Add user to the database
-                    user = User(username=full_name, email=email)
-                    db.session.add(user)
+                existing_user = User.query.filter(
+                    (User.email == email)).first()
+
+                if existing_user:
+                    continue
+                # Add user to the database
+                user = User(username=full_name, email=email)
+                db.session.add(user)
 
             # Committing all database changes
             db.session.commit()
 
-            return {"message": "Certificates processed successfully", "results": results}, 200
+            return {"message": "Certificates processed successfully"}, 200
 
         except Exception as e:
-            #Rolling back in case of an error
+            # Rolling back in case of an error
             db.session.rollback()
             return {"error": str(e)}, 500
 
-#preview shower
+# preview shower
+
+
 class CertificatePreview(Resource):
     def post(self):
-        data = request.get_json()
-        presentation_id = data.get('presentation_id')
-        full_name = data.get('full_name')
-
-        if not presentation_id or not full_name:
-            return jsonify({"error": "Missing required fields"}), 400
-
         try:
-            # Generate the preview using the provided data
-            image_data = generate_preview(presentation_id, full_name)
-            if image_data:
-                # Send the generated certificate as a JPG (image) file
-                return Response(
-                                image_data,
-                                mimetype='image/jpeg',  # Adjust based on your image format
-                                direct_passthrough=True
-                                )
-            else:
-                return jsonify({"error": "Failed to generate certificate preview"}), 500
+            img_file = request.form['image']
+
+            # Read the uploaded image as bytes
+            image_bytes = base64.b64decode(img_file.split(',')[1])
+
+            image = Image.open(
+                io.BytesIO(base64.b64decode(img_file.split(',')[1])))
+            width, height = image.size
+
+            start_x = float(request.form['start'])
+            start_y = float(request.form['end'])
+            font = int(request.form['font'])
+            size = float(request.form['size'])
+            color = json.loads(request.form['color'])
+            thickness = int(request.form['thickness'])
+            about_text = ((int(start_x*width), int(start_y*height)),
+                          font, size, color, thickness)
+            # Generate the certificate preview
+            result = generate_preview(image_bytes, about_text=about_text)
+
+            if result is None:
+                return {"error": "Failed to generate certificate preview"}, 500
+
+            # Return the modified image
+            response = send_file(
+                io.BytesIO(result),
+                mimetype='image/jpeg',
+                as_attachment=False,
+                download_name='certificate_preview.jpg'
+            )
+
+            return response
+
         except Exception as e:
-            # Catch and log any unexpected errors
-            return jsonify({"error": str(e)}), 500
+            return {"error": str(e)}, 500
 
 
-#db connection checker
+# db connection checker
 class Users(Resource):
     def get(self):
         try:
             users = User.query.all()
             # Format users as a list of dictionaries
-            users_list = [{"id": user.id, "username": user.username, "email": user.email} for user in users]
+            users_list = [{"id": user.id, "username": user.username,
+                           "email": user.email} for user in users]
             return {"users": users_list}, 200
 
         except Exception as e:
